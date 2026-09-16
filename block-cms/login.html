@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-brand"><span class="brand-dot"></span></div>
+    <h1 class="auth-title">Block CMS</h1>
+    <p class="auth-subtitle">A local, offline admin for your pages &amp; posts</p>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" data-tab="login">Log in</div>
+      <div class="auth-tab" data-tab="register">Register</div>
+    </div>
+
+    <div class="auth-error" id="auth-error"></div>
+
+    <form id="login-form">
+      <div class="field">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Log in</button>
+    </form>
+
+    <form id="register-form" style="display:none;">
+      <div class="field">
+        <label for="register-display-name">Display name</label>
+        <input type="text" id="register-display-name" autocomplete="name" placeholder="e.g. Jamie">
+      </div>
+      <div class="field">
+        <label for="register-username">Username</label>
+        <input type="text" id="register-username" autocomplete="username" required>
+      </div>
+      <div class="field">
+        <label for="register-password">Password</label>
+        <input type="password" id="register-password" autocomplete="new-password" required>
+        <div class="field-hint-text">At least 4 characters. Stored as a SHA-256 hash, never in plain text.</div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Create account</button>
+    </form>
+  </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script>
+  Router.redirectIfLoggedIn('dashboard.html');
+
+  const tabs = document.querySelectorAll('.auth-tab');
+  const loginForm = document.getElementById('login-form');
+  const registerForm = document.getElementById('register-form');
+  const errorBox = document.getElementById('auth-error');
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.classList.add('show');
+  }
+  function clearError() {
+    errorBox.classList.remove('show');
+    errorBox.textContent = '';
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      clearError();
+      const isLogin = tab.dataset.tab === 'login';
+      loginForm.style.display = isLogin ? 'block' : 'none';
+      registerForm.style.display = isLogin ? 'none' : 'block';
+    });
+  });
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const username = document.getElementById('login-username').value;
+    const password = document.getElementById('login-password').value;
+    try {
+      await Auth.login(username, password);
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearError();
+    const displayName = document.getElementById('register-display-name').value;
+    const username = document.getElementById('register-username').value;
+    const password = document.getElementById('register-password').value;
+    try {
+      await Auth.register(username, password, displayName);
+      window.location.href = 'dashboard.html';
+    } catch (err) {
+      showError(err.message);
+    }
+  });
+</script>
+</body>
+</html>

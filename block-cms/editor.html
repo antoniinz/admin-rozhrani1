@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editor — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 id="editor-heading">New page</h1>
+        <p class="page-subtitle" id="editor-subtitle"></p>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <a class="btn btn-secondary" id="preview-link" href="#" target="_blank">Open preview</a>
+        <button class="btn btn-primary" id="save-btn">Save</button>
+      </div>
+    </div>
+
+    <div class="editor-layout">
+      <div>
+        <div class="card editor-meta-card">
+          <div class="field">
+            <label for="field-title">Title</label>
+            <input type="text" id="field-title" placeholder="Untitled">
+          </div>
+          <div class="field">
+            <label for="field-slug">Slug</label>
+            <input type="text" id="field-slug" placeholder="auto-generated-from-title">
+          </div>
+
+          <div class="two-col">
+            <div class="field" style="margin-bottom:0;">
+              <label for="field-status">Status</label>
+              <select id="field-status">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </div>
+            <div class="field" id="publish-date-field" style="margin-bottom:0;">
+              <label for="field-publish-date">Publish date</label>
+              <input type="date" id="field-publish-date">
+            </div>
+          </div>
+
+          <div id="post-only-fields" style="display:none; margin-top:18px;">
+            <div class="field">
+              <label for="field-author">Author</label>
+              <input type="text" id="field-author" placeholder="Author name">
+            </div>
+            <div class="field" style="margin-bottom:0;">
+              <label>Categories</label>
+              <div class="checkbox-list" id="category-checkboxes"></div>
+              <div class="field-hint-text" id="no-categories-hint" style="display:none;">
+                No categories yet — <a href="categories.html" class="btn-link">create one</a>.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Content blocks</div>
+        <div class="block-toolbar" id="block-toolbar"></div>
+        <div class="block-list" id="block-list"></div>
+      </div>
+
+      <div class="preview-panel">
+        <div class="preview-panel-inner">
+          <div class="preview-panel-label"><span>Live preview</span></div>
+          <div id="live-preview"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/dragdrop.js"></script>
+<script src="js/blocks.js"></script>
+<script src="js/preview.js"></script>
+<script src="js/categories.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/posts.js"></script>
+<script>
+  Router.requireAuth();
+
+  const type = Router.param('type') === 'post' ? 'post' : 'page';
+  const id = Router.param('id');
+  const Model = type === 'post' ? Posts : Pages;
+
+  UI.renderSidebar(type === 'post' ? 'posts' : 'pages');
+  document.getElementById('post-only-fields').style.display = type === 'post' ? 'block' : 'none';
+  document.getElementById('publish-date-field').style.display = type === 'post' ? 'block' : 'none';
+
+  let item = id ? Model.get(id) : null;
+  let isNew = !item;
+  if (isNew) {
+    item = type === 'post'
+      ? { title: '', slug: '', blocks: [], status: 'draft', publishDate: new Date().toISOString(), author: Auth.currentUser().displayName, categoryIds: [] }
+      : { title: '', slug: '', blocks: [], status: 'draft' };
+  } else {
+    // work on a copy so unsaved edits don't leak into other views
+    item = JSON.parse(JSON.stringify(item));
+  }
+
+  document.getElementById('editor-heading').textContent = isNew
+    ? (type === 'post' ? 'New post' : 'New page')
+    : `Edit ${type === 'post' ? 'post' : 'page'}`;
+  document.getElementById('editor-subtitle').textContent = isNew
+    ? 'Unsaved — fill in the details and save.'
+    : `Last updated ${UI.formatDateTime(item.updatedAt)}`;
+
+  const titleEl = document.getElementById('field-title');
+  const slugEl = document.getElementById('field-slug');
+  const statusEl = document.getElementById('field-status');
+  const publishDateEl = document.getElementById('field-publish-date');
+  const authorEl = document.getElementById('field-author');
+  const catContainer = document.getElementById('category-checkboxes');
+  const noCatHint = document.getElementById('no-categories-hint');
+
+  titleEl.value = item.title || '';
+  slugEl.value = item.slug || '';
+  statusEl.value = item.status || 'draft';
+  if (type === 'post') {
+    publishDateEl.value = (item.publishDate || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+    authorEl.value = item.author || '';
+  }
+
+  let slugManuallyEdited = !!item.slug;
+  titleEl.addEventListener('input', () => {
+    if (!slugManuallyEdited) slugEl.value = UI.slugify(titleEl.value);
+  });
+  slugEl.addEventListener('input', () => { slugManuallyEdited = true; });
+
+  if (type === 'post') {
+    const categories = Categories.all();
+    if (!categories.length) {
+      noCatHint.style.display = 'block';
+    } else {
+      catContainer.innerHTML = categories.map(c => `
+        <label>
+          <input type="checkbox" value="${c.id}" ${item.categoryIds && item.categoryIds.includes(c.id) ? 'checked' : ''}>
+          ${UI.escapeHtml(c.name)}
+        </label>`).join('');
+    }
+  }
+
+  /* ---------- Block editor + live preview ---------- */
+
+  const blockListEl = document.getElementById('block-list');
+  const toolbarEl = document.getElementById('block-toolbar');
+  const previewEl = document.getElementById('live-preview');
+
+  function updatePreview() {
+    collectFormIntoItem();
+    Preview.renderInto(previewEl, item, {
+      showStatus: true,
+      author: type === 'post' ? item.author : null,
+      date: type === 'post' ? item.publishDate : null,
+      categories: type === 'post' ? Categories.namesFor(item.categoryIds) : []
+    });
+  }
+
+  Blocks.mountEditor(blockListEl, item.blocks, () => updatePreview());
+
+  toolbarEl.innerHTML = Blocks.TYPES.map(t =>
+    `<button type="button" class="btn btn-small" data-add="${t.key}">+ ${t.label}</button>`).join('');
+  toolbarEl.querySelectorAll('[data-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      item.blocks.push(Blocks.create(btn.dataset.add));
+      Blocks.mountEditor(blockListEl, item.blocks, () => updatePreview());
+      updatePreview();
+    });
+  });
+
+  [titleEl, slugEl, statusEl, publishDateEl, authorEl].forEach(el => {
+    el.addEventListener('input', updatePreview);
+    el.addEventListener('change', updatePreview);
+  });
+  if (type === 'post') {
+    catContainer.addEventListener('change', updatePreview);
+  }
+
+  function collectFormIntoItem() {
+    item.title = titleEl.value || 'Untitled';
+    item.slug = slugEl.value;
+    item.status = statusEl.value;
+    if (type === 'post') {
+      item.publishDate = publishDateEl.value ? new Date(publishDateEl.value).toISOString() : new Date().toISOString();
+      item.author = authorEl.value;
+      item.categoryIds = Array.from(catContainer.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    }
+  }
+
+  function currentPreviewUrl() {
+    const slug = slugEl.value || UI.slugify(titleEl.value) || '';
+    return `preview.html?type=${type}&slug=${encodeURIComponent(slug)}`;
+  }
+  document.getElementById('preview-link').addEventListener('click', (e) => {
+    e.currentTarget.href = currentPreviewUrl();
+  });
+
+  document.getElementById('save-btn').addEventListener('click', () => {
+    collectFormIntoItem();
+    if (!item.title.trim()) {
+      UI.toast('Please give this a title before saving.', 'error');
+      return;
+    }
+    if (isNew) {
+      const saved = Model.create(item);
+      UI.toast((type === 'post' ? 'Post' : 'Page') + ' created');
+      window.location.href = `editor.html?type=${type}&id=${saved.id}`;
+    } else {
+      Model.update(item.id, item);
+      UI.toast((type === 'post' ? 'Post' : 'Page') + ' saved');
+      document.getElementById('editor-subtitle').textContent = `Last updated just now`;
+    }
+  });
+
+  updatePreview();
+</script>
+</body>
+</html>

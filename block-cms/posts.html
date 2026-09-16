@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Posts — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Posts</h1>
+        <p class="page-subtitle">Blog-style posts with categories and publish dates.</p>
+      </div>
+      <a class="btn btn-primary" href="editor.html?type=post">+ New post</a>
+    </div>
+
+    <div class="toolbar">
+      <select id="filter-status">
+        <option value="all">All statuses</option>
+        <option value="draft">Draft</option>
+        <option value="published">Published</option>
+      </select>
+      <select id="filter-category">
+        <option value="all">All categories</option>
+      </select>
+      <select id="sort-by">
+        <option value="date-desc">Newest first</option>
+        <option value="date-asc">Oldest first</option>
+        <option value="title-asc">Title A–Z</option>
+        <option value="title-desc">Title Z–A</option>
+      </select>
+      <div class="spacer"></div>
+    </div>
+
+    <div id="posts-list"></div>
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/categories.js"></script>
+<script src="js/posts.js"></script>
+<script>
+  Router.requireAuth();
+  UI.renderSidebar('posts');
+
+  const listEl = document.getElementById('posts-list');
+  const statusFilter = document.getElementById('filter-status');
+  const categoryFilter = document.getElementById('filter-category');
+  const sortBy = document.getElementById('sort-by');
+
+  const categories = Categories.all();
+  categoryFilter.innerHTML += categories.map(c => `<option value="${c.id}">${UI.escapeHtml(c.name)}</option>`).join('');
+
+  function render() {
+    let items = Posts.filterAndSort(Posts.all(), {
+      status: statusFilter.value,
+      categoryId: categoryFilter.value,
+      sortBy: sortBy.value
+    });
+
+    if (!items.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <h3>No posts found</h3>
+          <p>Try changing your filters, or create a new post.</p>
+          <div style="margin-top:14px;"><a class="btn btn-primary" href="editor.html?type=post">+ New post</a></div>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr><th>Title</th><th>Status</th><th>Categories</th><th>Publish date</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${items.map(p => `
+            <tr>
+              <td class="title-cell">
+                <a href="editor.html?type=post&id=${p.id}">${UI.escapeHtml(p.title)}</a>
+                <span class="slug">/${UI.escapeHtml(p.slug)}</span>
+              </td>
+              <td>${UI.statusBadge(p.status)}</td>
+              <td>${Categories.namesFor(p.categoryIds).map(UI.escapeHtml).join(', ') || '—'}</td>
+              <td>${UI.formatDate(p.publishDate)}</td>
+              <td>
+                <div class="row-actions">
+                  <a class="btn-small" href="preview.html?type=post&slug=${encodeURIComponent(p.slug)}" target="_blank">Preview</a>
+                  <a class="btn-small" href="editor.html?type=post&id=${p.id}">Edit</a>
+                  <button class="btn-small" data-delete="${p.id}">Delete</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+
+    listEl.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await UI.confirm('Delete this post? This cannot be undone.');
+        if (!ok) return;
+        Posts.remove(btn.dataset.delete);
+        UI.toast('Post deleted');
+        render();
+      });
+    });
+  }
+
+  [statusFilter, categoryFilter, sortBy].forEach(el => el.addEventListener('change', render));
+  render();
+</script>
+</body>
+</html>

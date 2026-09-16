@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Block CMS</title>
+</head>
+<body>
+<script src="js/storage.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  window.location.href = Auth.isLoggedIn() ? 'dashboard.html' : 'login.html';
+</script>
+<noscript>This app requires JavaScript. Please open <a href="login.html">login.html</a>.</noscript>
+</body>
+</html>

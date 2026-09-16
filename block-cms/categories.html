@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Categories — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Categories</h1>
+        <p class="page-subtitle">Organize your posts into categories.</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:24px;">
+      <div class="section-title">Add a category</div>
+      <form id="add-form" style="display:flex; gap:10px; align-items:flex-start;">
+        <input type="text" id="new-name" placeholder="Category name" required style="flex:1;">
+        <button type="submit" class="btn btn-primary">Add</button>
+      </form>
+    </div>
+
+    <div id="categories-list"></div>
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/categories.js"></script>
+<script src="js/posts.js"></script>
+<script>
+  Router.requireAuth();
+  UI.renderSidebar('categories');
+
+  const listEl = document.getElementById('categories-list');
+  const addForm = document.getElementById('add-form');
+  const newName = document.getElementById('new-name');
+
+  function render() {
+    const cats = Categories.all();
+    if (!cats.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <h3>No categories yet</h3>
+          <p>Add one above to start organizing your posts.</p>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Slug</th><th>Posts</th><th></th></tr></thead>
+        <tbody>
+          ${cats.map(c => `
+            <tr data-row="${c.id}">
+              <td class="title-cell">
+                <span class="cat-name">${UI.escapeHtml(c.name)}</span>
+                <input type="text" class="cat-edit-input" style="display:none;" value="${UI.escapeHtml(c.name)}">
+              </td>
+              <td><span class="slug">/${UI.escapeHtml(c.slug)}</span></td>
+              <td><a class="btn-link" href="posts.html">${Posts.byCategory(c.id).length} post(s)</a></td>
+              <td>
+                <div class="row-actions">
+                  <button class="btn-small" data-rename="${c.id}">Rename</button>
+                  <button class="btn-small" data-delete="${c.id}">Delete</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+
+    listEl.querySelectorAll('[data-rename]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = listEl.querySelector(`tr[data-row="${btn.dataset.rename}"]`);
+        const nameSpan = row.querySelector('.cat-name');
+        const input = row.querySelector('.cat-edit-input');
+        const isEditing = input.style.display !== 'none';
+        if (!isEditing) {
+          nameSpan.style.display = 'none';
+          input.style.display = 'inline-block';
+          input.focus();
+          btn.textContent = 'Save';
+        } else {
+          const value = input.value.trim();
+          if (value) {
+            try {
+              Categories.update(btn.dataset.rename, { name: value });
+              UI.toast('Category renamed');
+              render();
+            } catch (err) {
+              UI.toast(err.message, 'error');
+            }
+          } else {
+            render();
+          }
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await UI.confirm('Delete this category? It will be removed from any posts.');
+        if (!ok) return;
+        Categories.remove(btn.dataset.delete);
+        UI.toast('Category deleted');
+        render();
+      });
+    });
+  }
+
+  addForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    try {
+      Categories.create(newName.value);
+      newName.value = '';
+      UI.toast('Category added');
+      render();
+    } catch (err) {
+      UI.toast(err.message, 'error');
+    }
+  });
+
+  render();
+</script>
+</body>
+</html>

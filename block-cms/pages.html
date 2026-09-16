@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pages — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Pages</h1>
+        <p class="page-subtitle">Static pages built from blocks.</p>
+      </div>
+      <a class="btn btn-primary" href="editor.html?type=page">+ New page</a>
+    </div>
+
+    <div class="toolbar">
+      <select id="filter-status">
+        <option value="all">All statuses</option>
+        <option value="draft">Draft</option>
+        <option value="published">Published</option>
+      </select>
+      <div class="spacer"></div>
+    </div>
+
+    <div id="pages-list"></div>
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/pages.js"></script>
+<script>
+  Router.requireAuth();
+  UI.renderSidebar('pages');
+
+  const listEl = document.getElementById('pages-list');
+  const statusFilter = document.getElementById('filter-status');
+
+  function render() {
+    let items = Pages.all();
+    if (statusFilter.value !== 'all') items = items.filter(p => p.status === statusFilter.value);
+
+    if (!items.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <h3>No pages yet</h3>
+          <p>Create your first page to get started.</p>
+          <div style="margin-top:14px;"><a class="btn btn-primary" href="editor.html?type=page">+ New page</a></div>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr><th>Title</th><th>Status</th><th>Last modified</th><th></th></tr>
+        </thead>
+        <tbody>
+          ${items.map(p => `
+            <tr>
+              <td class="title-cell">
+                <a href="editor.html?type=page&id=${p.id}">${UI.escapeHtml(p.title)}</a>
+                <span class="slug">/${UI.escapeHtml(p.slug)}</span>
+              </td>
+              <td>${UI.statusBadge(p.status)}</td>
+              <td>${UI.formatDate(p.updatedAt)}</td>
+              <td>
+                <div class="row-actions">
+                  <a class="btn-small" href="preview.html?type=page&slug=${encodeURIComponent(p.slug)}" target="_blank">Preview</a>
+                  <a class="btn-small" href="editor.html?type=page&id=${p.id}">Edit</a>
+                  <button class="btn-small" data-delete="${p.id}">Delete</button>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+
+    listEl.querySelectorAll('[data-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ok = await UI.confirm('Delete this page? This cannot be undone.');
+        if (!ok) return;
+        Pages.remove(btn.dataset.delete);
+        UI.toast('Page deleted');
+        render();
+      });
+    });
+  }
+
+  statusFilter.addEventListener('change', render);
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Block CMS</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 id="welcome-heading">Dashboard</h1>
+        <p class="page-subtitle" id="welcome-sub"></p>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-pages">0</div>
+        <div class="stat-label">Pages</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-posts">0</div>
+        <div class="stat-label">Posts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-published">0</div>
+        <div class="stat-label">Published</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-categories">0</div>
+        <div class="stat-label">Categories</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="section-title">Recent pages</div>
+        <div id="recent-pages"></div>
+        <div style="margin-top:14px;">
+          <a class="btn btn-secondary" href="editor.html?type=page">+ New page</a>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Recent posts</div>
+        <div id="recent-posts"></div>
+        <div style="margin-top:14px;">
+          <a class="btn btn-secondary" href="editor.html?type=post">+ New post</a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/router.js"></script>
+<script src="js/categories.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/posts.js"></script>
+<script>
+  Router.requireAuth();
+  UI.renderSidebar('dashboard');
+
+  const user = Auth.currentUser();
+  document.getElementById('welcome-heading').textContent = `Welcome back, ${user.displayName}`;
+  document.getElementById('welcome-sub').textContent = 'Here’s what’s happening across your site.';
+
+  const pages = Pages.all();
+  const posts = Posts.all();
+  const categories = Categories.all();
+  const publishedCount = pages.filter(p => p.status === 'published').length
+    + posts.filter(p => p.status === 'published').length;
+
+  document.getElementById('stat-pages').textContent = pages.length;
+  document.getElementById('stat-posts').textContent = posts.length;
+  document.getElementById('stat-published').textContent = publishedCount;
+  document.getElementById('stat-categories').textContent = categories.length;
+
+  function renderList(container, items, type) {
+    if (!items.length) {
+      container.innerHTML = `<p style="color:var(--text-secondary); font-size:14px;">Nothing here yet.</p>`;
+      return;
+    }
+    container.innerHTML = items.slice(0, 5).map(item => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border-light);">
+        <a href="editor.html?type=${type}&id=${item.id}" style="text-decoration:none; color:var(--text); font-weight:500;">${UI.escapeHtml(item.title)}</a>
+        ${UI.statusBadge(item.status)}
+      </div>`).join('');
+  }
+
+  renderList(document.getElementById('recent-pages'), pages, 'page');
+  renderList(document.getElementById('recent-posts'), posts, 'post');
+</script>
+</body>
+</html>
